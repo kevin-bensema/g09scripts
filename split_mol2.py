@@ -3,6 +3,7 @@
 # Split a single mol2 file into several .com files
 # Optionally with a given param, mem, and cores resources.
 
+import sys
 import argparse
 import re
 
@@ -63,9 +64,9 @@ def create_com_file(molecule, filename, route, cores,
   with open(filename, 'w') as f:
     # Write the link-0 commands - cores and memory
     f.write('%nprocshared={0}\n'.format(cores))
-    f.write('%mem={0}\n'.format(memory))
+    f.write('%mem={0}MB\n'.format(memory))
     # Write the route card
-    f.write('# {0} \n'.format(route))
+    f.write('{0} \n'.format(route))
     # Required blank line, title card, required blank line
     f.write('\n{0}\n\n'.format(molecule.conf_name))
     # charge and multiplicity, molecule spec.
@@ -82,13 +83,15 @@ if __name__ == '__main__':
   p = argparse.ArgumentParser(description = \
     'Split up a mol2 file into .com g09 input files')
   p.add_argument('mol2', help = 'mol2 file to split')
-  p.add_argument('--mem', type = str, default = '4GB',
-    help = 'Memory, including unit, for each created .com file')
+  p.add_argument('--mem', type = int, default = '4096',
+    help = 'Memory, in megabytes, for each created .com file. default 4GB')
   p.add_argument('--cores', type = int, default = 8,
     help = 'Cores for each created .com file')
   p.add_argument('--route', type = str, 
-    default = 'COMPUTATIONAL PARAMETERS HERE',
-    help = 'computational parameters string. Used quotes to enclose spaces')
+    help = 'computational parameters string. Use quotes to enclose the card. Requires initial #')
+  p.add_argument('--route-file', type = str,
+    help = 'Alternatively, use this to specify the location of a file where' + \
+           'the route card may be found. Route card in file must include initial #.')
   p.add_argument('--charge', type = int, default = 0,
     help = 'Charge for the molecular input specification. Default 0')
   p.add_argument('--mult', type = int, default = 1,
@@ -97,6 +100,16 @@ if __name__ == '__main__':
     help = 'Prefix for each .com file created.')
   args = p.parse_args()
   
+  route_card = ''
+  if args.route is None and args.route_file is None:
+    print('Route card string or file required. Bad user!')
+    sys.exit(0)
+  elif args.route is not None:
+    route_card = args.route
+  else:
+    with open(args.route_file, 'r') as f:
+      route_card = f.readline().strip()
+
   mol2_lines = list()
   with open(args.mol2, 'r') as f:
     mol2_lines = f.readlines()
@@ -105,7 +118,7 @@ if __name__ == '__main__':
   molecules = [Mol2Molecule(mol2_lines[mol_slice]) for mol_slice in slice_list]
   for molecule in molecules:
     filename = '{0}_{1}.com'.format(args.prefix, molecule.conf_name)
-    create_com_file(molecule, filename, args.route, args.cores,
+    create_com_file(molecule, filename, route_card, args.cores,
                     args.mem, args.charge, args.mult)
       
     
